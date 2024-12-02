@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  dokumentum_kereso-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8510:8510"
+    volumes:
+      - ./data/txt:/app/txt:ro
+      - ./data/onkorm.db:/app/onkorm.db:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+
