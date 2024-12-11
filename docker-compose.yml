@@ -9,7 +9,7 @@ services:
       - "8510:8510"
     volumes:
       - ./data/txt:/app/txt:ro
-      - ./data/onkorm.db:/app/onkorm.db:ro
+      - ./data/onkorm.db:/app/onkorm.db:ro      
     environment:
       - PYTHONUNBUFFERED=1
 
