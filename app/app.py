@@ -3,6 +3,7 @@ import io
 import os
 import re
 import requests
+import shutil
 import sqlite3
 import time
 import zipfile
@@ -14,10 +15,17 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="XI Dokumentum kereső")
 
-# Constants
-DATABASE_PATH = Path("./onkorm.db")
-txt_folder = Path("./txt")
-root_folder = Path("./downloads")
+dev = True
+
+if dev:
+    DATABASE_PATH = Path("../data/onkorm.db")
+    TXT_FOLDER = Path("../data/txt")
+    DOWNLOAD_FOLDER = Path("./downloads")    
+
+else:
+    DATABASE_PATH = Path("./onkorm.db")
+    TXT_FOLDER = Path("./txt")
+    DOWNLOAD_FOLDER = Path("./downloads")
 
 @dataclass
 class Onkorm:
@@ -77,8 +85,8 @@ if app_mode == "Kereső":
         total_files = 0
         matched_files = set()
 
-        for folder in os.listdir(txt_folder):
-            folder_path = os.path.join(txt_folder, folder)
+        for folder in os.listdir(TXT_FOLDER):
+            folder_path = os.path.join(TXT_FOLDER, folder)
 
             for subfolder in os.listdir(folder_path):
                 subfolder_path = os.path.join(folder_path, subfolder)
@@ -204,7 +212,7 @@ elif app_mode == "ZIP Letöltő":
                 st.error("A megadott dátumhoz nincs elérhető mappa!")
             else:
                 st.write(f"Mappa UUID: {folder_uuid}")
-                folder_path = root_folder / folder_uuid
+                folder_path = DOWNLOAD_FOLDER / folder_uuid
                 os.makedirs(folder_path, exist_ok=True)
 
                 # Fetch Folder Details
@@ -213,7 +221,6 @@ elif app_mode == "ZIP Letöltő":
                 session_type = folder_detail_json.json()["content"]["nev"]
                 session_uuid = folder_detail_json.json()["content"]["uuid"]
                 
-                st.write(folder_detail_json.json())
                 st.write(session_type)
 
                 # Determine API Routes
@@ -227,11 +234,20 @@ elif app_mode == "ZIP Letöltő":
                 # Get Agenda Points
                 st.write(body_agenda_url)
                 agenda_json = requests.get(body_agenda_url, verify=False)
+                #st.write(agenda_json.json())
                 doc_uuid_list = [
                     point["uuid"]
                     for point in agenda_json.json()["content"]
                     if point["nyilvanossagjelolo"] != "1"
                 ]
+                
+                public_docs = [i['name'] for i in agenda_json.json().get("content") if i['nyilvanossagjelolo'] != "1"]
+                not_public_docs = [i['name'] for i in agenda_json.json().get("content") if i['nyilvanossagjelolo'] == "1"]
+                		
+               	st.write("Nyilvános dokumentumok:")
+                st.write(public_docs)
+               	st.write("Nem nyilvános dokumentumok:")
+                st.write(not_public_docs)                
 
                 # Download Files
                 for doc_uuid in doc_uuid_list:
@@ -240,19 +256,25 @@ elif app_mode == "ZIP Letöltő":
 
                     if not body_file_json.json()['content']:
                         continue
+                        
+                   # 9) Save pdfs
+                    for file_item in body_file_json.json().get("content", []):
 
-                    file_name = body_file_json.json()["content"][0]["name"]
-                    file_uuid = body_file_json.json()["content"][0]["uuid"]
-                    file_download_url = f"{ujbuda.base_url}/getfile/{file_uuid}/{file_name}"
-                    file_response = requests.get(file_download_url)
+                        file_name = file_item.get("name")
+                        file_uuid = file_item.get("uuid")
 
-                    save_path = folder_path / file_name
+                        file_download_url = f"{ujbuda.base_url}/getfile/{file_uuid}/{file_name}"
+
+                        file_response = requests.get(file_download_url, timeout=10)
+                        file_response.raise_for_status()
+                        save_path = folder_path / file_name      
+        
                     with open(save_path, "wb") as file:
                         file.write(file_response.content)
 
                 # Create ZIP Archive
                 zip_name = target_date.replace(".", "_") + ".zip"
-                zip_archive = root_folder / zip_name
+                zip_archive = DOWNLOAD_FOLDER / zip_name
                 with zipfile.ZipFile(zip_archive, "w", zipfile.ZIP_DEFLATED) as zipf:
                     for root, dirs, files in os.walk(folder_path):
                         for file in files:
@@ -270,10 +292,7 @@ elif app_mode == "ZIP Letöltő":
                     )
 
                 # Clean Up
-                for root, dirs, files in os.walk(folder_path):
-                    for file in files:
-                        os.remove(os.path.join(root, file))
-                os.rmdir(folder_path)
+                shutil.rmtree(folder_path)
                 os.remove(zip_archive)
                 st.success("Feldolgozás és tisztítás befejezve!")
 
