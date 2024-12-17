@@ -9,7 +9,8 @@ services:
       - "8510:8510"
     volumes:
       - ./data/txt:/app/txt:ro
-      - ./data/onkorm.db:/app/onkorm.db:ro      
+      - ./data/onkorm.db:/app/onkorm.db:ro
+      - ./data/whoosh_index_dir:/app/whoosh_index_dir:ro
     environment:
       - PYTHONUNBUFFERED=1
 

@@ -1,3 +1,6 @@
+"""
+Indexelt keresés
+"""
 import datetime
 import io
 import os
@@ -12,6 +15,9 @@ from dataclasses import dataclass
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+from whoosh import index
+from whoosh.qparser import QueryParser
+from whoosh.query import Regex
 
 st.set_page_config(page_title="XI Dokumentum kereső")
 
@@ -20,22 +26,37 @@ dev = True
 if dev:
     DATABASE_PATH = Path("../data/onkorm.db")
     TXT_FOLDER = Path("../data/txt")
-    DOWNLOAD_FOLDER = Path("./downloads")    
+    INDEX_FOLDER = Path("../data/whoosh_index_dir")
+    DOWNLOAD_FOLDER = Path("./downloads")
 
 else:
     DATABASE_PATH = Path("./onkorm.db")
     TXT_FOLDER = Path("./txt")
+    INDEX_FOLDER = Path("./whoosh_index_dir")
     DOWNLOAD_FOLDER = Path("./downloads")
+
+ix = index.open_dir(INDEX_FOLDER)
+
 
 @dataclass
 class Onkorm:
+    """Dataclass to store configuration for Onkorm."""
+
     name: str
     base_url: str
+    db_folder: str
+    db_napirendi: str
+    db_file_detail: str
+
 
 ujbuda = Onkorm(
     name="Újbuda",
-    base_url="https://mikrodat.ujbuda.hu/app/cms/api/honlap"
+    base_url="https://mikrodat.ujbuda.hu/app/cms/api/honlap",
+    db_folder="ujbuda_meghivo_mappa",
+    db_napirendi="ujbuda_napirendi",
+    db_file_detail="ujbuda_file_det",
 )
+
 
 # Fetch Data
 def fetch_data_from_db(database_path, query):
@@ -45,6 +66,7 @@ def fetch_data_from_db(database_path, query):
         rows = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
     return [dict(zip(columns, row)) for row in rows]
+
 
 mappa_query = "SELECT * FROM ujbuda_meghivo_mappa"
 napi_query = "SELECT * FROM ujbuda_napirendi"
@@ -62,7 +84,6 @@ if app_mode == "Kereső":
     st.sidebar.header("Keresési Beállítások")
 
     search_text = st.sidebar.text_input("Keresendő szöveg", "")
-    case_sensitive = st.sidebar.checkbox("Kis- és nagybetű érzékeny", value=False)
     exact_match = st.sidebar.checkbox("Pontos egyezés", value=False)
     search_button = st.sidebar.button("Keresés")
 
@@ -74,108 +95,79 @@ if app_mode == "Kereső":
         default=unique_names if select_all else [],
     )
 
-    flags = 0 if case_sensitive else re.IGNORECASE
-    pattern = rf"\b{re.escape(search_text)}\b" if exact_match else re.escape(search_text)
-    regex = re.compile(pattern, flags)
+    def build_regex(search_text, exact_match):
+        pattern = (
+            rf"\b{re.escape(search_text)}\b" if exact_match else re.escape(search_text)
+        )
+        return re.compile(pattern)
 
-    if search_button:
-        # Perform Search
-        start_time = time.time()
-        results = []
-        total_files = 0
-        matched_files = set()
-
-        for folder in os.listdir(TXT_FOLDER):
-            folder_path = os.path.join(TXT_FOLDER, folder)
-
-            for subfolder in os.listdir(folder_path):
-                subfolder_path = os.path.join(folder_path, subfolder)
-
-                for file in os.listdir(subfolder_path):
-                    file_path = os.path.join(subfolder_path, file)
-                    total_files += 1
-
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        lines = f.readlines()
-
-                    for i, line in enumerate(lines):
-                        if regex.search(line):
-                            matched_files.add(file_path)
-                            start, end = max(0, i - 3), min(len(lines), i + 4)
-                            context = "".join(lines[start:end]).strip()
-
-                            napi_entry = next(
-                                (n for n in napi_data if n["uuid"] == subfolder), None
-                            )
-                            if napi_entry:
-                                mappa_entry = next(
-                                    (m for m in mappa_data if m["folder_uuid"] == folder),
-                                    None,
-                                )
-
-                                if mappa_entry and mappa_entry["name"] in selected_names:
-                                    results.append(
-                                        {
-                                            "dátum": mappa_entry["datum"],
-                                            "név": mappa_entry["name"],
-                                            "napirendi pont": napi_entry["targy"],
-                                            "file": file,
-                                            "context": context,
-                                        }
-                                    )
-                            break
-
-        results.sort(key=lambda x: datetime.datetime.strptime(x["dátum"], "%Y.%m.%d."))
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        percentage_matched = (len(matched_files) / total_files) * 100 if total_files else 0
-
-        st.write("""A nyilvánosan nem elérhető előterjesztési dokumentumok, 
-        illetve a döntési javaslatok és azok mellékletei nem szerepelnek az adatbázisban.""")
+    if search_text or search_button:
         st.divider()
-
-        st.write(f"Feldolgozott fájlok száma: {total_files}")
-        st.write(f"Találatok: {len(matched_files)} fájl ({percentage_matched:.2f}%)")
-        st.write(f"Feldolgozási idő: {elapsed_time:.2f} másodperc")
-
-        if results:
-            df_results = pd.DataFrame(results)
-
-            # Group results by month and count matches
-            df_results['dátum'] = pd.to_datetime(df_results['dátum'], format='%Y.%m.%d.')
-            df_results['month_year'] = df_results['dátum'].dt.to_period('M')
-            matches_over_time = df_results.groupby('month_year').size().reset_index(name='match_count')
-
-            # Convert 'month_year' back to string for better display
-            matches_over_time['month_year'] = matches_over_time['month_year'].astype(str)
-
-            # Display the data as a bar chart
-            st.subheader("Találatok száma idő szerint")
-            st.write("A találatok havi bontásban")
-            st.bar_chart(matches_over_time.set_index('month_year')['match_count'])
-
-            # Create Excel file
-            excel_buffer = io.BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-                df_results.to_excel(writer, index=False, sheet_name="Eredmények")
-            excel_data = excel_buffer.getvalue()
-
-            st.download_button(
-                label="Eredmények letöltése Excel formátumban",
-                data=excel_data,
-                file_name=f"keresesi_eredmenyek_{search_text}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        with ix.searcher() as searcher:
+            start_time = time.time()
+            regex = build_regex(search_text, exact_match=exact_match)
+            # query = QueryParser("content", ix.schema).parse(regex)
+            query = Regex("content", regex.pattern)
+            results = searcher.search(query, limit=None, sortedby="date", reverse=True)
+            matched_files = results.scored_length()
+            total_files = searcher.doc_count_all()
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            percentage_matched = (
+                (matched_files / total_files) * 100 if total_files else 0
             )
 
+            st.write(
+                """A nyilvánosan nem elérhető előterjesztési dokumentumok, 
+		    illetve a döntési javaslatok és azok mellékletei nem szerepelnek az adatbázisban."""
+            )
+            st.divider()
+
+            st.write(f"Feldolgozott fájlok száma: {total_files}")
+            st.write(
+                f"Találatok: {matched_files} dokumentum ({percentage_matched:.2f}%)"
+            )
+            st.write(f"Feldolgozási idő: {elapsed_time:.2f} másodperc")
+            st.divider()
+
             for result in results:
-                st.subheader(f"{result['dátum']}")
-                st.write(f"**{result['név']}**")
-                st.write(f"**Napirendi pont:** {result['napirendi pont']}")
-                st.write(f"**Szövegkörnyezet:** (...) {result['context']} (...)")
-                st.write(f"Fájl: {result['file']}")
-        else:
-            st.write("Nincs találat a keresési feltételek alapján.")
+                with sqlite3.connect(DATABASE_PATH) as conn:
+                    cur = conn.cursor()
+
+                    agenda_uuid = result["agenda_uuid"]
+                    folder_uuid = result["folder_uuid"]
+
+                    cur.execute(
+                        f"SELECT * FROM {ujbuda.db_folder} WHERE folder_uuid='{folder_uuid}'"
+                    )
+                    folder_details = cur.fetchone()
+                    session_type = folder_details[3]
+                    file_path = Path(
+                        TXT_FOLDER
+                        / result["folder_uuid"]
+                        / result["agenda_uuid"]
+                        / result["file_name"]
+                    )
+                    if session_type in selected_names:
+                        cur.execute(
+                            f"SELECT * FROM {ujbuda.db_napirendi} WHERE uuid='{agenda_uuid}'"
+                        )
+                        agenda_details = cur.fetchone()
+                        st.write(f"{session_type}")
+                        # st.write(file_path)
+                        st.write(f"Dátum: {result['date'].strftime('%Y %m %d')}")
+                        st.write(f"Napirendi pont: {agenda_details[3]}")
+
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+                            for i, line in enumerate(lines):
+                                if regex.search(line):
+                                    start, end = max(0, i - 3), min(len(lines), i + 4)
+                                    context = "".join(lines[start:end]).strip()
+                                    break
+                        st.write("Szövegkontextus: ")
+                        st.code(context)
+                        st.divider()
 
 
 elif app_mode == "ZIP Letöltő":
@@ -204,8 +196,12 @@ elif app_mode == "ZIP Letöltő":
             target_date = selected_date
             folder_year_json = response.json()
             folder_uuid = next(
-                (i["uuid"] for i in folder_year_json["content"] if i["datum"] == target_date),
-                None
+                (
+                    i["uuid"]
+                    for i in folder_year_json["content"]
+                    if i["datum"] == target_date
+                ),
+                None,
             )
 
             if not folder_uuid:
@@ -220,7 +216,7 @@ elif app_mode == "ZIP Letöltő":
                 folder_detail_json = requests.get(folder_detail_url, verify=False)
                 session_type = folder_detail_json.json()["content"]["nev"]
                 session_uuid = folder_detail_json.json()["content"]["uuid"]
-                
+
                 st.write(session_type)
 
                 # Determine API Routes
@@ -234,41 +230,50 @@ elif app_mode == "ZIP Letöltő":
                 # Get Agenda Points
                 st.write(body_agenda_url)
                 agenda_json = requests.get(body_agenda_url, verify=False)
-                #st.write(agenda_json.json())
+                # st.write(agenda_json.json())
                 doc_uuid_list = [
                     point["uuid"]
                     for point in agenda_json.json()["content"]
                     if point["nyilvanossagjelolo"] != "1"
                 ]
-                
-                public_docs = [i['name'] for i in agenda_json.json().get("content") if i['nyilvanossagjelolo'] != "1"]
-                not_public_docs = [i['name'] for i in agenda_json.json().get("content") if i['nyilvanossagjelolo'] == "1"]
-                		
-               	st.write("Nyilvános dokumentumok:")
+
+                public_docs = [
+                    i["name"]
+                    for i in agenda_json.json().get("content")
+                    if i["nyilvanossagjelolo"] != "1"
+                ]
+                not_public_docs = [
+                    i["name"]
+                    for i in agenda_json.json().get("content")
+                    if i["nyilvanossagjelolo"] == "1"
+                ]
+
+                st.write("Nyilvános dokumentumok:")
                 st.write(public_docs)
-               	st.write("Nem nyilvános dokumentumok:")
-                st.write(not_public_docs)                
+                st.write("Nem nyilvános dokumentumok:")
+                st.write(not_public_docs)
 
                 # Download Files
                 for doc_uuid in doc_uuid_list:
                     body_dok_url = f"{ujbuda.base_url}/elo/djav?uuid={folder_uuid}&uuid2={doc_uuid}"
                     body_file_json = requests.get(body_dok_url, verify=False)
 
-                    if not body_file_json.json()['content']:
+                    if not body_file_json.json()["content"]:
                         continue
-                        
-                   # 9) Save pdfs
-                    for file_item in body_file_json.json().get("content", []):
 
+                    # 9) Save pdfs
+                    for file_item in body_file_json.json().get("content", []):
                         file_name = file_item.get("name")
                         file_uuid = file_item.get("uuid")
 
-                        file_download_url = f"{ujbuda.base_url}/getfile/{file_uuid}/{file_name}"
+                        file_download_url = (
+                            f"{ujbuda.base_url}/getfile/{file_uuid}/{file_name}"
+                        )
 
                         file_response = requests.get(file_download_url, timeout=10)
                         file_response.raise_for_status()
-                        save_path = folder_path / file_name      
-        
+                        save_path = folder_path / file_name
+
                     with open(save_path, "wb") as file:
                         file.write(file_response.content)
 
@@ -295,4 +300,3 @@ elif app_mode == "ZIP Letöltő":
                 shutil.rmtree(folder_path)
                 os.remove(zip_archive)
                 st.success("Feldolgozás és tisztítás befejezve!")
-
