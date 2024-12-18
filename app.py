@@ -23,20 +23,18 @@ st.set_page_config(page_title="XI Dokumentum kereső")
 
 dev = True
 
-if dev:
-    DATABASE_PATH = Path("../data/onkorm.db")
-    TXT_FOLDER = Path("../data/txt")
-    INDEX_FOLDER = Path("../data/whoosh_index_dir")
-    DOWNLOAD_FOLDER = Path("./downloads")
-
-else:
-    DATABASE_PATH = Path("./onkorm.db")
-    TXT_FOLDER = Path("./txt")
-    INDEX_FOLDER = Path("./whoosh_index_dir")
-    DOWNLOAD_FOLDER = Path("./downloads")
-
+print("dev")
+DATABASE_PATH = Path("./data/onkorm.db")
+TXT_FOLDER = Path("./data/txt")
+INDEX_FOLDER = Path("./data/whoosh_index_dir")
+DOWNLOAD_FOLDER = Path("./downloads")
+print(DATABASE_PATH)
+print(TXT_FOLDER)    
+print(INDEX_FOLDER)
+print(DOWNLOAD_FOLDER)
+print(os.listdir(INDEX_FOLDER))
+    
 ix = index.open_dir(INDEX_FOLDER)
-
 
 @dataclass
 class Onkorm:
