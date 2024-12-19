@@ -1,0 +1,9 @@
+2024-12-19 17:46:13,813 - INFO - Processing folder: 57ddebcc-532d-11ef-90f5-e70a27390546
+2024-12-19 17:46:14,117 - WARNING - No file content for agenda 58512014-532d-11ef-90f5-e70a27390546
+2024-12-19 17:46:14,151 - ERROR - 596ace1f-532d-11ef-90f5-e70a27390546 already in database
+2024-12-19 17:46:14,198 - INFO - Downloaded file _b_Ferencv_Kelenfold_Vasut_munkaterulet_Vhid_hat_24.0110.pdf for agenda 58801f6b-532d-11ef-90f5-e70a27390546
+2024-12-19 17:46:14,200 - INFO - Converted PDF to text: data/txt_test/57ddebcc-532d-11ef-90f5-e70a27390546/58801f6b-532d-11ef-90f5-e70a27390546/_b_Ferencv_Kelenfold_Vasut_munkaterulet_Vhid_hat_24.0110.txt
+2024-12-19 17:46:14,225 - ERROR - 59f13b6b-532d-11ef-90f5-e70a27390546 already in database
+2024-12-19 17:46:14,265 - INFO - Downloaded file Mikes Kelemen 779 hrsz - elővásárlási jog - döntési javaslat.pdf for agenda 58ab0010-532d-11ef-90f5-e70a27390546
+2024-12-19 17:46:14,267 - INFO - Converted PDF to text: data/txt_test/57ddebcc-532d-11ef-90f5-e70a27390546/58ab0010-532d-11ef-90f5-e70a27390546/Mikes Kelemen 779 hrsz - elővásárlási jog - döntési javaslat.txt
+2024-12-19 17:46:14,285 - WARNING - No file content for agenda 58fb9136-532d-11ef-90f5-e70a27390546
