@@ -1,24 +1,30 @@
 """
-XI-Files updater
+XI-Files 
+Több mindent, kevesebb semmit!
 """
 import logging
 import os
 import requests
-import shutil
 import sqlite3
-import sys
+import time
+import pandas as pd
+import shutil
 import warnings
-
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 
-import fitz
-import pandas as pd
+import fitz # pymupdf
+from whoosh import index
+from whoosh.index import create_in
+from whoosh.fields import Schema, TEXT, ID, DATETIME
+
 warnings.filterwarnings("ignore")
 
 # Paths
 DATABASE_PATH = Path("./data/onkorm.db")
 LOG_FILE_PATH = Path("./log/download.log")
+INDEX_FOLDER = Path("./data/whoosh_index_dir")
 PDF_FOLDER = Path("./data/pdf")
 TXT_FOLDER = Path("./data/txt")
 
@@ -119,11 +125,11 @@ missing_df = collector_df[collector_df["folder_uuid"].isin(missing_uuid)]
 #missing_df = collector_df[collector_df["folder_uuid"].isin(missing_uuid)]
 ##########testing##################
 
-print(f"Len of missing_df: {len(missing_df)}")
-print(missing_df)
-if len(missing_df) == 0:
-    sys.exit()
-print("downloading missing")
+if len(missing_df) > 0:
+    print(f"Len of missing_df: {len(missing_df)}")
+    print(missing_df)
+else:
+    print("No new documents")
 
 for folder_uuid in missing_df["folder_uuid"]:
     
@@ -272,6 +278,48 @@ for folder_uuid in missing_df["folder_uuid"]:
             except Exception as e:
                 logging.error(f"Error converting file {file_name} to text: {e}")
 
-#Clean up pdf folder            
-shutil.rmtree(PDF_FOLDER)             
+#Clean up pdf folder
+shutil.rmtree(PDF_FOLDER)       
+
+#Reindex
+if len(missing_df) > 0:
+
+    print("Reindexing")
+
+    if INDEX_FOLDER.exists() and INDEX_FOLDER.is_dir():
+        shutil.rmtree(INDEX_FOLDER)
+
+    os.makedirs(INDEX_FOLDER, exist_ok=True)
+
+    schema = Schema(file_name=TEXT(stored=True),
+                    date=DATETIME(stored=True,sortable=True),
+                    folder_uuid=ID(stored=True),
+                    agenda_uuid=ID(stored=True),
+                    content=TEXT)
+
+    ix = create_in(INDEX_FOLDER, schema)
+
+    writer = ix.writer()
+
+    for folder_uuid in os.listdir(TXT_FOLDER):
+
+        with sqlite3.connect(DATABASE_PATH) as conn:
+            cur = conn.cursor()
+            cur.execute(f"SELECT * FROM {ujbuda.db_folder} WHERE folder_uuid='{folder_uuid}'")
+            folder_details = cur.fetchone()
+            date = datetime.strptime(folder_details[2],'%Y.%m.%d.')
+
+        for agenda_uuid in os.listdir(TXT_FOLDER/folder_uuid):
+
+            for file in os.listdir(TXT_FOLDER/folder_uuid/agenda_uuid):
+                with open(TXT_FOLDER/folder_uuid/agenda_uuid/file,"r") as f:
+                    content = " ".join([i.strip().replace("/n","") for i in f.readlines() if i.strip()])
+
+                writer.add_document(file_name=file,
+                                    date=date,
+                                    folder_uuid=folder_uuid,
+                                    agenda_uuid=agenda_uuid,
+                                    content=content
+                                   )
+    writer.commit()
 
