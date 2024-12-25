@@ -149,6 +149,7 @@ if app_mode == "Kereső":
                         st.write(f"Dátum: {result['date'].strftime('%Y %m %d')}")
                         st.write(f"Napirendi pont: {agenda_details[3]}")
 
+                        context = None
                         with open(file_path, "r", encoding="utf-8") as f:
                             lines = f.readlines()
                             for i, line in enumerate(lines):
@@ -156,8 +157,12 @@ if app_mode == "Kereső":
                                     start, end = max(0, i - 3), min(len(lines), i + 4)
                                     context = "".join(lines[start:end]).strip()
                                     break
-                        st.write("Szövegkontextus: ")
-                        st.code(context)
+                        if context:
+                            st.write("Szövegkontextus: ")
+                            st.code(context)
+                            
+                        else:
+                            st.write("Nem megjeleníthető kontextus")
                         st.divider()
 
 
