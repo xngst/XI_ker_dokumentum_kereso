@@ -1,16 +1,26 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  dokumentum_kereso-app:
+  webservice:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./webservice  # Path to your Streamlit Dockerfile
+    container_name: webservice
     ports:
       - "8510:8510"
     volumes:
       - ./data/txt:/app/data/txt:ro
-      - ./data/onkorm.db:/app/data/onkorm.db:ro
+      - ./data/onkorm.db:/app/data/onkorm.db:ro  # Bind mount for the database file
       - ./data/whoosh_index_dir:/app/data/whoosh_index_dir:ro
-    environment:
-      - PYTHONUNBUFFERED=1
+
+  updater:
+    build:
+      context: ./updater  # Path to your updater Dockerfile
+    container_name: updater
+    volumes:
+      - ./data/txt:/app/data/txt:rw
+      - ./data/onkorm.db:/app/data/onkorm.db:rw  # Bind mount for the database file
+      - ./data/whoosh_index_dir:/app/data/whoosh_index_dir:rw
+      - ./data/pdf:/app/data/pdf:rw  # Folder for PDF files
+      - ./updater/log:/app/log:rw  # Folder for log files
+      - ./updater/output.txt:/app/output.txt
 
