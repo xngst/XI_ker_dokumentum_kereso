@@ -1,0 +1,27 @@
+2024-12-27 15:43:59,270 - INFO - No new documents
+2024-12-27 16:46:13,025 - INFO - Env: prod
+2024-12-27 16:47:01,416 - INFO - Env: test
+2024-12-27 16:47:01,589 - INFO - Test case 1
+2024-12-27 16:47:01,595 - INFO -          datum nyilvanossagjelolo   kategoria idopont                   hely                           folder_uuid
+0  2024.01.10.                     rendkívüli   10.00  Polgármesteri Hivatal  57ddebcc-532d-11ef-90f5-e70a27390546
+2024-12-27 16:48:43,110 - INFO - Env: prod
+2024-12-27 16:49:19,264 - INFO - Env: test
+2024-12-27 16:49:19,486 - INFO - Test case 1
+2024-12-27 16:49:19,491 - INFO -          datum nyilvanossagjelolo   kategoria idopont                   hely                           folder_uuid
+0  2024.01.10.                     rendkívüli   10.00  Polgármesteri Hivatal  57ddebcc-532d-11ef-90f5-e70a27390546
+2024-12-27 16:49:19,494 - INFO - Processing folder: 57ddebcc-532d-11ef-90f5-e70a27390546
+2024-12-27 16:49:20,019 - WARNING - No file content for agenda 58512014-532d-11ef-90f5-e70a27390546
+2024-12-27 16:49:20,062 - ERROR - 596ace1f-532d-11ef-90f5-e70a27390546 already in database
+2024-12-27 16:49:47,463 - INFO - Env: test
+2024-12-27 16:49:48,007 - INFO - Test case 1
+2024-12-27 16:49:48,011 - INFO -          datum nyilvanossagjelolo   kategoria idopont                   hely                           folder_uuid
+0  2024.01.10.                     rendkívüli   10.00  Polgármesteri Hivatal  57ddebcc-532d-11ef-90f5-e70a27390546
+2024-12-27 16:49:48,015 - INFO - Processing folder: 57ddebcc-532d-11ef-90f5-e70a27390546
+2024-12-27 16:49:48,335 - WARNING - No file content for agenda 58512014-532d-11ef-90f5-e70a27390546
+2024-12-27 16:49:48,369 - ERROR - 596ace1f-532d-11ef-90f5-e70a27390546 already in database
+2024-12-27 16:49:48,414 - INFO - Downloaded file _b_Ferencv_Kelenfold_Vasut_munkaterulet_Vhid_hat_24.0110.pdf for agenda 58801f6b-532d-11ef-90f5-e70a27390546
+2024-12-27 16:49:48,436 - INFO - Converted PDF to text: ../data/txt/57ddebcc-532d-11ef-90f5-e70a27390546/58801f6b-532d-11ef-90f5-e70a27390546/_b_Ferencv_Kelenfold_Vasut_munkaterulet_Vhid_hat_24.0110.txt
+2024-12-27 16:49:48,458 - ERROR - 59f13b6b-532d-11ef-90f5-e70a27390546 already in database
+2024-12-27 16:49:48,501 - INFO - Downloaded file Mikes Kelemen 779 hrsz - elővásárlási jog - döntési javaslat.pdf for agenda 58ab0010-532d-11ef-90f5-e70a27390546
+2024-12-27 16:49:48,503 - INFO - Converted PDF to text: ../data/txt/57ddebcc-532d-11ef-90f5-e70a27390546/58ab0010-532d-11ef-90f5-e70a27390546/Mikes Kelemen 779 hrsz - elővásárlási jog - döntési javaslat.txt
+2024-12-27 16:49:48,521 - WARNING - No file content for agenda 58fb9136-532d-11ef-90f5-e70a27390546
