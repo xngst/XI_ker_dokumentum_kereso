@@ -99,6 +99,8 @@ def insert_into_table(conn, table_name, data):
 
 logging.info(f"Env: {env}")
 
+os.makedirs(PDF_FOLDER, exist_ok=True)
+
 ### 1) fetch folder uuid from db
 
 folder_df = fetch_data_from_db(DATABASE_PATH, ujbuda.db_folder)
