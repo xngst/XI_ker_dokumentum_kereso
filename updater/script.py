@@ -20,7 +20,7 @@ from whoosh.index import create_in
 from whoosh.fields import Schema, TEXT, ID, DATETIME
 
 warnings.filterwarnings("ignore")
-env = "prod"
+env = "test"
 
 # Paths
 if env == "prod":
@@ -141,10 +141,11 @@ missing_uuid = list(set(api_folder_uuid) - set(db_folder_uuid))
 missing_df = collector_df[collector_df["folder_uuid"].isin(missing_uuid)]
 
 if env == "test":
-    logging.info("Test case 1")
-    db_folder_uuid = db_folder_uuid.iloc[1:]
-    missing_uuid = list(set(api_folder_uuid) - set(db_folder_uuid))
-    missing_df = collector_df[collector_df["folder_uuid"].isin(missing_uuid)]
+    print("skipping test case")
+    #logging.info("Test case 1")
+    #db_folder_uuid = db_folder_uuid.iloc[1:]
+    #missing_uuid = list(set(api_folder_uuid) - set(db_folder_uuid))
+    #missing_df = collector_df[collector_df["folder_uuid"].isin(missing_uuid)]
 
 if len(missing_df) > 0:
     print(f"Len of missing_df: {len(missing_df)}")
@@ -170,32 +171,26 @@ for folder_uuid in missing_df["folder_uuid"]:
         continue
 
     folder_details["folder_uuid"] = folder_uuid
-    agenda_uuid = folder_details.pop("uuid", None)
+    folder_details["detail_uuid"] = folder_details.pop("uuid")
+    agenda_uuid = folder_details["detail_uuid"]
 
     if "nev" in folder_details:
         folder_details["name"] = folder_details.pop("nev")
-
-    # Update folder details in the database
-    try:
-        with sqlite3.connect(DATABASE_PATH) as conn:
-            cursor = conn.cursor()
-            values = ", ".join(
-                [f"{key} = ?" for key in folder_details if key != "folder_uuid"]
-            )
-            sql = f"UPDATE {ujbuda.db_folder} SET {values} WHERE folder_uuid = ?"
-            cursor.execute(
-                sql,
-                tuple(
-                    folder_details[key]
-                    for key in folder_details
-                    if key != "folder_uuid"
-                )
-                + (folder_uuid,),
-            )
+        
+    #Insert folder_details into db_folder
+    with sqlite3.connect(DATABASE_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT 1 FROM {ujbuda.db_folder} WHERE folder_uuid = ?", (folder_uuid,))
+        if not cursor.fetchone():
+            logging.info(f"Inserting {folder_uuid} in {ujbuda.db_folder}")
+            columns = list(folder_details.keys())
+            placeholders = ", ".join(["?"] * len(columns))
+            sql = f"INSERT INTO {ujbuda.db_folder} ({', '.join(columns)}) VALUES ({placeholders})"
+            cursor.execute(sql, tuple(folder_details[col] for col in columns))
             conn.commit()
-    except sqlite3.DatabaseError as e:
-        logging.error(f"Database error while updating folder UUID {folder_uuid}: {e}")
-        continue
+        else:
+            logging.warning(f"{folder_uuid} already in {ujbuda.db_folder}")
+            print(f"{folder_uuid} already in {ujbuda.db_folder}")
 
     session_type = folder_details.get("name", "").lower()
 
@@ -279,9 +274,9 @@ for folder_uuid in missing_df["folder_uuid"]:
                 )
                 if not cursor.fetchone():
                     insert_into_table(conn, ujbuda.db_file_detail, file_item)
-                    logging.info(f"{file_uuid} added to database")
+                    logging.info(f"file_uuid {file_uuid} added to database")
                 else:
-                    logging.error(f"{file_uuid} already in database")
+                    logging.error(f"file_uuid {file_uuid} already in database")
 
         for file_item in body_file_json.get("content", []):
             file_name = file_item.get("name")
@@ -337,13 +332,12 @@ if len(missing_df) > 0:
 
     os.makedirs(INDEX_FOLDER, exist_ok=True)
 
-    schema = Schema(
-        file_name=TEXT(stored=True),
-        date=DATETIME(stored=True, sortable=True),
-        folder_uuid=ID(stored=True),
-        agenda_uuid=ID(stored=True),
-        content=TEXT,
-    )
+    schema = Schema(file_name=TEXT(stored=True),
+                    date=DATETIME(stored=True,sortable=True),
+                    folder_uuid=ID(stored=True),
+                    agenda_uuid=ID(stored=True),
+                    document_uuid=ID(stored=True),
+                    content=TEXT)
 
     ix = create_in(INDEX_FOLDER, schema)
 
@@ -352,28 +346,49 @@ if len(missing_df) > 0:
     for folder_uuid in os.listdir(TXT_FOLDER):
         with sqlite3.connect(DATABASE_PATH) as conn:
             cur = conn.cursor()
-            cur.execute(
-                f"SELECT * FROM {ujbuda.db_folder} WHERE folder_uuid='{folder_uuid}'"
-            )
+            cur.execute(f"""SELECT datum 
+            FROM {ujbuda.db_folder} 
+            WHERE folder_uuid='{folder_uuid}'
+            """)
             folder_details = cur.fetchone()
-            date = datetime.strptime(folder_details[2], "%Y.%m.%d.")
+            try:
+                date = datetime.strptime(folder_details[0],'%Y.%m.%d.') 
+            except TypeError as te:
+                print(te)
+                continue
 
-        for agenda_uuid in os.listdir(TXT_FOLDER / folder_uuid):
-            for file in os.listdir(TXT_FOLDER / folder_uuid / agenda_uuid):
-                with open(TXT_FOLDER / folder_uuid / agenda_uuid / file, "r") as f:
-                    content = " ".join(
-                        [
-                            i.strip().replace("/n", "")
-                            for i in f.readlines()
-                            if i.strip()
-                        ]
-                    )
+            for agenda_uuid in os.listdir(TXT_FOLDER/folder_uuid):
 
-                writer.add_document(
-                    file_name=file,
-                    date=date,
-                    folder_uuid=folder_uuid,
-                    agenda_uuid=agenda_uuid,
-                    content=content,
-                )
+                for file in os.listdir(TXT_FOLDER/folder_uuid/agenda_uuid):
+                    
+                    with sqlite3.connect(DATABASE_PATH) as conn:
+                        cur = conn.cursor()
+                        try:
+                            cur.execute(f"""SELECT uuid 
+                            FROM {ujbuda.db_file_detail} 
+                            WHERE 
+                            folder_uuid = '{folder_uuid}'
+                            AND agenda_uuid = '{agenda_uuid}'
+                            AND name = '{file.replace("txt","pdf")}'
+                            """)
+                        except Exception as e:
+                            print(e)
+                            continue
+                        try:
+                            document_uuid = cur.fetchone()[0]
+                        except Exception as e:
+                            print(e)
+                            continue
+
+                    with open(TXT_FOLDER/folder_uuid/agenda_uuid/file,"r") as f:
+                        content = " ".join([i.strip().replace("/n","") for i in f.readlines() if i.strip()])
+        
+                    writer.add_document(file_name=file,
+                                        date=date,
+                                        folder_uuid=folder_uuid,
+                                        agenda_uuid=agenda_uuid,
+                                        content=content,
+                                        document_uuid=document_uuid
+                                       )                        
+
     writer.commit()
