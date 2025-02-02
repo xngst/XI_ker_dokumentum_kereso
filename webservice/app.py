@@ -14,7 +14,6 @@ from pathlib import Path
 from dataclasses import dataclass
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
 from whoosh import index
 from whoosh.qparser import QueryParser
 from whoosh.query import Regex
@@ -28,11 +27,9 @@ DOWNLOAD_FOLDER = Path("./downloads")
 
 ix = index.open_dir(INDEX_FOLDER)
 
-
 @dataclass
 class Onkorm:
     """Dataclass to store configuration for Onkorm."""
-
     name: str
     base_url: str
     db_folder: str
@@ -127,18 +124,25 @@ if app_mode == "Kereső":
 
                     agenda_uuid = result["agenda_uuid"]
                     folder_uuid = result["folder_uuid"]
-
-                    cur.execute(
-                        f"SELECT * FROM {ujbuda.db_folder} WHERE folder_uuid='{folder_uuid}'"
-                    )
-                    folder_details = cur.fetchone()
-                    session_type = folder_details[3]
+                    file_name = result['file_name'].replace("txt","pdf")
+                    
                     file_path = Path(
                         TXT_FOLDER
                         / result["folder_uuid"]
                         / result["agenda_uuid"]
                         / result["file_name"]
                     )
+                    
+                    meghivo_link = f"https://mikrodat.ujbuda.hu/web/inv/{folder_uuid}"
+                    document_link = f"https://mikrodat.ujbuda.hu/app/cms/api/honlap/getfile/{result['document_uuid']}/{file_name}"
+                    
+                    cur.execute(
+                        f"SELECT * FROM {ujbuda.db_folder} WHERE folder_uuid='{folder_uuid}'"
+                    )                    
+                    
+                    folder_details = cur.fetchone()
+                    session_type = folder_details[3]
+                    
                     if session_type in selected_names:
                         cur.execute(
                             f"SELECT * FROM {ujbuda.db_napirendi} WHERE uuid='{agenda_uuid}'"
@@ -146,9 +150,9 @@ if app_mode == "Kereső":
                         agenda_details = cur.fetchone()
                         st.write(f"{session_type}")
                         # st.write(file_path)
-                        st.write(f"Dátum: {result['date'].strftime('%Y %m %d')}")
-                        st.write(f"Napirendi pont: {agenda_details[3]}")
-
+                        st.write(f"**Dátum:** {result['date'].strftime('%Y %m %d')}")
+                        st.write(f"**Napirendi pont:** {agenda_details[3]}")
+                        
                         context = None
                         with open(file_path, "r", encoding="utf-8") as f:
                             lines = f.readlines()
@@ -160,6 +164,8 @@ if app_mode == "Kereső":
                         if context:
                             st.write("Szövegkontextus: ")
                             st.code(context)
+                            st.link_button("Meghívó", meghivo_link)
+                            st.link_button("Dokumentum", document_link)
                             
                         else:
                             st.write("Nem megjeleníthető kontextus")
@@ -175,10 +181,10 @@ elif app_mode == "ZIP Letöltő":
     year = datetime.datetime.now().year
     folder_year_url = f"{ujbuda.base_url}/inv/folders?year={year}"
 
-    st.write("Dátumok betöltése...")
     response = requests.get(folder_year_url, verify=False)
     if response.status_code == 200:
-        available_dates = [entry["datum"] for entry in response.json()["content"]]
+        available_dates = [f"{entry['datum']} {entry['idopont']}" 
+        for entry in response.json()["content"]][::-1]
         selected_date = st.sidebar.selectbox("Válasszon dátumot:", available_dates)
     else:
         st.sidebar.error("Nem sikerült lekérni a dátumokat!")
@@ -189,17 +195,15 @@ elif app_mode == "ZIP Letöltő":
         download_button = st.sidebar.button("Letöltés és Csomagolás")
 
         if download_button:
-            target_date = selected_date
             folder_year_json = response.json()
-            folder_uuid = next(
-                (
-                    i["uuid"]
-                    for i in folder_year_json["content"]
-                    if i["datum"] == target_date
-                ),
-                None,
-            )
-
+            target_date = selected_date.split()
+			
+            folder_uuid = [
+                item["uuid"] for item in folder_year_json["content"] 
+			    if item["datum"] == target_date[0] 
+			    and item["idopont"] == target_date[1]
+			][0]
+            
             if not folder_uuid:
                 st.error("A megadott dátumhoz nincs elérhető mappa!")
             else:
@@ -274,7 +278,7 @@ elif app_mode == "ZIP Letöltő":
                         file.write(file_response.content)
 
                 # Create ZIP Archive
-                zip_name = target_date.replace(".", "_") + ".zip"
+                zip_name = target_date[0].replace(".", "_") + target_date[1].replace(".", "_") + ".zip"
                 zip_archive = DOWNLOAD_FOLDER / zip_name
                 with zipfile.ZipFile(zip_archive, "w", zipfile.ZIP_DEFLATED) as zipf:
                     for root, dirs, files in os.walk(folder_path):
